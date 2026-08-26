@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
 from nfl_data import fetch_schedule
-from sheets_db import read_tab, overwrite_tab
+from sheets_db import read_tab, overwrite_tab, update_cells_by_match
 
 SEASON = 2026
 
@@ -15,6 +15,17 @@ def sync_games():
     schedule_to_save["kickoff_utc"] = schedule_to_save["kickoff_utc"].astype(str)
     overwrite_tab("Games", schedule_to_save)
     resolve_eliminations(schedule)
+
+    settings = read_tab("Settings")
+    week_row = settings[settings["key"] == "current_week"]
+    if not week_row.empty:
+        try:
+            current_week = int(week_row["value"].iloc[0])
+        except (ValueError, TypeError):
+            current_week = None
+        if current_week is not None:
+            resolve_missing_picks(schedule, current_week)
+
     return schedule
 
 
@@ -26,19 +37,17 @@ def _status(row):
 
 def resolve_eliminations(games_df: pd.DataFrame):
     picks = read_tab("Picks")
-    users = read_tab("Users")
     if picks.empty:
         return
 
     finals = games_df[games_df["status"] == "final"]
-    picks["result"] = picks.get("result", "")
-    changed = False
 
     for i, pick in picks.iterrows():
-        if str(pick["result"]) not in ("", "pending", "nan"):
+        if str(pick.get("result", "")) not in ("", "pending", "nan"):
             continue
         week = int(pick["week"])
         team = pick["team"]
+        username = pick["username"]
         game = finals[(finals["week"] == week) & ((finals["home_team"] == team) | (finals["away_team"] == team))]
         if game.empty:
             continue
@@ -62,15 +71,56 @@ def resolve_eliminations(games_df: pd.DataFrame):
         else:
             result = "loss"
 
-        picks.at[i, "result"] = result
-        changed = True
+        # Antes se acumulaban todos los cambios en memoria y se hacía UN SOLO
+        # overwrite_tab al final para Picks y Users. Se confirmó con carga
+        # real que overwrite_tab (leer TODA la pestaña, reescribir TODA la
+        # pestaña) puede perder o incluso BORRAR POR COMPLETO datos de otros
+        # usuarios si hay una escritura concurrente en el medio — se
+        # reprodujo en pruebas: una corrida con usuarios concurrentes borró
+        # los picks de toda la temporada. Actualizamos cada fila puntual.
+        update_cells_by_match("Picks", {"username": username, "week": week}, {"result": result})
 
         if result == "loss":
-            u_idx = users.index[users["username"] == pick["username"]]
-            if len(u_idx):
-                users.loc[u_idx, "is_alive"] = "FALSE"
-                users.loc[u_idx, "eliminated_week"] = str(week)
+            update_cells_by_match("Users", {"username": username}, {
+                "is_alive": "FALSE", "eliminated_week": str(week),
+            })
 
-    if changed:
-        overwrite_tab("Picks", picks)
-        overwrite_tab("Users", users)
+
+def resolve_missing_picks(games_df: pd.DataFrame, current_week: int):
+    """Elimina automáticamente a los usuarios vivos que no hicieron pick esta
+    semana, una vez que ya arrancaron TODOS los partidos de la semana (ya no
+    queda ningún equipo disponible para elegir)."""
+    week_games = games_df[games_df["week"] == current_week]
+    if week_games.empty:
+        return
+
+    now = datetime.now(timezone.utc)
+    kickoffs = pd.to_datetime(week_games["kickoff_utc"], utc=True)
+    if not (kickoffs <= now).all():
+        return  # todavía hay partidos de la semana sin empezar
+
+    users = read_tab("Users")
+    if users.empty:
+        return
+
+    alive_mask = users["is_alive"].astype(str).str.upper() == "TRUE"
+    if not alive_mask.any():
+        return
+
+    picks = read_tab("Picks")
+    picked_usernames = set()
+    if not picks.empty:
+        week_picks = picks[picks["week"].astype(str) == str(current_week)]
+        picked_usernames = set(week_picks["username"])
+
+    missing_mask = alive_mask & ~users["username"].isin(picked_usernames)
+    if not missing_mask.any():
+        return
+
+    # Un update puntual por usuario en vez de overwrite_tab sobre toda la
+    # pestaña Users (mismo motivo: evitar pisar/borrar cambios concurrentes
+    # de otros usuarios, ej. alguien activando su reentry al mismo tiempo).
+    for username in users.loc[missing_mask, "username"]:
+        update_cells_by_match("Users", {"username": username}, {
+            "is_alive": "FALSE", "eliminated_week": str(current_week),
+        })

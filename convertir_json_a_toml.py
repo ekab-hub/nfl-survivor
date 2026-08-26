@@ -2,7 +2,7 @@
 import json
 
 # Cambia esto por la ruta real de tu archivo descargado
-JSON_PATH = "linear-elf-506318-m3-4aaec7675483.json"
+JSON_PATH = "linear-elf-506318-m3-02353f315789.json"
 OUTPUT_PATH = ".streamlit/secrets.toml"
 
 with open(JSON_PATH, "r") as f:

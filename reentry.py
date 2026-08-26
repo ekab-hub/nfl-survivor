@@ -1,4 +1,4 @@
-from sheets_db import read_tab, overwrite_tab
+from sheets_db import read_tab, update_cells_by_match
 
 
 def get_user_row(username: str):
@@ -24,13 +24,12 @@ def can_use_reentry(user_row, current_week: int, reentry_deadline_week: int) -> 
     except (ValueError, TypeError):
         return False
 
-    return eliminated_week < reentry_deadline_week
+    return eliminated_week < reentry_deadline_week and current_week < reentry_deadline_week
 
 
 def activate_reentry(username: str):
-    users = read_tab("Users")
-    idx = users.index[users["username"] == username]
-    if len(idx):
-        users.loc[idx, "is_alive"] = "TRUE"
-        users.loc[idx, "used_reentry"] = "TRUE"
-        overwrite_tab("Users", users)
+    # update puntual en vez de overwrite_tab sobre toda Users, para no
+    # arriesgarse a pisar cambios concurrentes de otros usuarios.
+    update_cells_by_match("Users", {"username": username}, {
+        "is_alive": "TRUE", "used_reentry": "TRUE",
+    })
