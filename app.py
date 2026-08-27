@@ -5,7 +5,7 @@ from picks import get_available_teams, get_current_pick, submit_pick
 from reentry import get_user_row, can_use_reentry, activate_reentry
 from admin import is_admin, render_admin_panel
 from sheets_db import read_tab
-from week_reveal import is_week_complete, get_team_pick_counts, get_week_reveal
+from week_reveal import is_week_complete, get_week_reveal
 from theme import (
     inject_css, render_hero, render_week_banner, render_team_card_html,
     render_leaderboard, render_week_reveal, render_privacy_note,
@@ -39,14 +39,13 @@ if not st.session_state.logged_in:
                     st.error(msg)
 
         with tab_register:
-            new_u = st.text_input("Elige un usuario", key="reg_u")
-            new_name = st.text_input("Tu nombre (como quieres aparecer)", key="reg_name")
-            new_p = st.text_input("Elige una contraseña", type="password", key="reg_p")
+            new_u = st.text_input("Usuario", key="reg_u")
+            new_p = st.text_input("Contraseña", type="password", key="reg_p")
             if st.button("Crear cuenta", type="primary"):
-                if not new_u or not new_p or not new_name:
+                if not new_u or not new_p:
                     st.error("Llena todos los campos.")
                 else:
-                    ok, msg = register_user(new_u, new_p, new_name)
+                    ok, msg = register_user(new_u, new_p, new_u)
                     if ok:
                         st.success(msg)
                     else:
@@ -99,15 +98,11 @@ else:
                 prefix = "vs" if side == "home" else "@"
                 options.append({"team": team, "disponible": disponible, "rival": rival, "prefix": prefix})
 
-        # Cuántos usuarios eligieron cada equipo esta semana, sin decir quiénes
-        # (los picks de cada persona son privados hasta que termine la semana).
-        pick_counts = get_team_pick_counts(current_week)
-
         pending_key = f"pending_pick__{st.session_state.username}__{current_week}"
         if pending_key not in st.session_state:
-            default_team = current_team if any(o["team"] == current_team for o in options) else (
-                options[0]["team"] if options else None
-            )
+            # Si ya tenía un pick confirmado esta semana lo mostramos seleccionado;
+            # si no, no preseleccionamos nada — que el usuario elija a propósito.
+            default_team = current_team if any(o["team"] == current_team for o in options) else None
             st.session_state[pending_key] = default_team
 
         for _, g in games_week.iterrows():
@@ -122,10 +117,7 @@ else:
                     team = g[f"{side}_team"]
                     opt = next(o for o in options if o["team"] == team)
                     selected = st.session_state[pending_key] == team
-                    render_team_card_html(
-                        team, opt["rival"], opt["prefix"], opt["disponible"], selected,
-                        pick_count=pick_counts.get(team, 0),
-                    )
+                    render_team_card_html(team, opt["rival"], opt["prefix"], opt["disponible"], selected)
                     btn_label = "Seleccionado ✅" if selected else "Elegir este equipo"
                     if st.button(
                         btn_label,
@@ -142,7 +134,9 @@ else:
 
         if selected_team is None:
             st.info("Selecciona un equipo para continuar.")
-        elif not is_valid and selected_team != current_team:
+        elif selected_team == current_team:
+            st.button("✅ Pick confirmado", disabled=True)
+        elif not is_valid:
             st.error("Ese equipo ya no está disponible (ya lo usaste o su partido ya empezó).")
         else:
             if st.button("✅ Confirmar pick", type="primary"):

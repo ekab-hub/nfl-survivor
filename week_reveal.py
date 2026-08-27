@@ -9,17 +9,6 @@ def is_week_complete(games_week: pd.DataFrame) -> bool:
     return bool((games_week["status"] == "final").all())
 
 
-def get_team_pick_counts(week: int) -> dict:
-    """Cuántos usuarios eligieron cada equipo esta semana, sin decir quiénes."""
-    picks = read_tab("Picks")
-    if picks.empty:
-        return {}
-    picks_week = picks[picks["week"].astype(str) == str(week)]
-    if picks_week.empty:
-        return {}
-    return picks_week.groupby("team").size().to_dict()
-
-
 def get_week_reveal(week: int) -> pd.DataFrame:
     """Quién jugó qué equipo y el resultado. Solo debe mostrarse cuando la semana
     ya terminó (usar junto con is_week_complete)."""

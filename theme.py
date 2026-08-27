@@ -272,14 +272,6 @@ def inject_css():
         .status-pill.alive {{ background: rgba(47,177,112,0.18); color: {GREEN}; border: 1px solid {GREEN}; }}
         .status-pill.out {{ background: rgba(214,22,43,0.18); color: #ff6b7a; border: 1px solid {RED}; }}
 
-        /* ---------- Popularidad de picks (anónimo) ---------- */
-        .pick-count {{
-            margin-top: 0.5rem;
-            font-size: 0.85rem;
-            font-weight: 700;
-            opacity: 0.9;
-        }}
-
         /* ---------- Reveal de fin de semana ---------- */
         .reveal-row {{
             display: flex;
@@ -404,7 +396,7 @@ def render_week_banner(week: int):
     st.markdown(f'<div class="week-banner">📅 Semana {week}</div>', unsafe_allow_html=True)
 
 
-def render_team_card_html(abbr: str, rival: str, prefix: str, available: bool, selected: bool, pick_count: int = 0):
+def render_team_card_html(abbr: str, rival: str, prefix: str, available: bool, selected: bool):
     meta = get_team_meta(abbr)
     classes = "team-card"
     if selected:
@@ -419,13 +411,6 @@ def render_team_card_html(abbr: str, rival: str, prefix: str, available: bool, s
     else:
         tag_html = ""
 
-    if pick_count == 1:
-        count_text = "👥 1 persona lo eligió"
-    elif pick_count > 1:
-        count_text = f"👥 {pick_count} personas lo eligieron"
-    else:
-        count_text = "👥 Nadie lo ha elegido todavía"
-
     style = (
         f"background: linear-gradient(160deg, {meta['primary']} 0%, {meta['secondary']} 140%); "
         f"color: #ffffff;"
@@ -436,7 +421,6 @@ def render_team_card_html(abbr: str, rival: str, prefix: str, available: bool, s
         f'<div class="name">{html.escape(meta["name"])}</div>'
         f'<div class="rival">{html.escape(prefix)} {html.escape(str(rival))}</div>'
         f'{tag_html}'
-        f'<div class="pick-count">{count_text}</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
