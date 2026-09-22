@@ -24,7 +24,11 @@ def can_use_reentry(user_row, current_week: int, reentry_deadline_week: int) -> 
     except (ValueError, TypeError):
         return False
 
-    return eliminated_week < reentry_deadline_week and current_week < reentry_deadline_week
+    return (
+        eliminated_week < reentry_deadline_week
+        and current_week < reentry_deadline_week
+        and current_week == eliminated_week + 1
+    )
 
 
 def activate_reentry(username: str):
