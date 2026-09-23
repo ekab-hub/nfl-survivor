@@ -165,6 +165,8 @@ else:
             "display_name": u["display_name"],
             "alive": str(u["is_alive"]).upper() == "TRUE",
             "eliminated_week": u.get("eliminated_week", ""),
+            "used_reentry": str(u.get("used_reentry", "")).upper() == "TRUE",
+            "can_reentry": can_use_reentry(u, current_week, reentry_deadline),
         }
         for _, u in users.iterrows()
     ]

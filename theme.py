@@ -267,10 +267,12 @@ def inject_css():
             font-weight: 800;
             padding: 0.35rem 0.8rem;
             border-radius: 999px;
-            white-space: nowrap;
+            text-align: center;
+            max-width: 48%;
         }}
         .status-pill.alive {{ background: rgba(47,177,112,0.18); color: {GREEN}; border: 1px solid {GREEN}; }}
         .status-pill.out {{ background: rgba(214,22,43,0.18); color: #ff6b7a; border: 1px solid {RED}; }}
+        .status-pill.pending {{ background: rgba(232,185,62,0.18); color: {GOLD}; border: 1px solid {GOLD}; }}
 
         /* ---------- Reveal de fin de semana ---------- */
         .reveal-row {{
@@ -427,15 +429,37 @@ def render_team_card_html(abbr: str, rival: str, prefix: str, available: bool, s
 
 
 def render_leaderboard(board_rows):
-    """board_rows: lista de dicts {display_name, alive(bool), eliminated_week}"""
+    """board_rows: lista de dicts {display_name, alive(bool), eliminated_week,
+    used_reentry(bool), can_reentry(bool)}. Pinta 4 estados:
+    1) vivo sin reentry usado -> verde "Vivo"
+    2) vivo con reentry ya usado -> verde "Vivo · reentry ya usado"
+    3) eliminado pero todavía puede activar reentry esta semana -> ámbar,
+       resaltado como acción pendiente (fila sin atenuar ni tachar)
+    4) eliminado sin ninguna opción -> rojo "Eliminado", estado final (como antes)
+    """
     rows_html = []
     for row in board_rows:
         name = str(row["display_name"])
         alive = row["alive"]
+        used_reentry = row.get("used_reentry", False)
+        can_reentry = row.get("can_reentry", False)
         elim_week = row.get("eliminated_week", "")
-        row_class = "board-row" if alive else "board-row eliminated"
-        pill_class = "status-pill alive" if alive else "status-pill out"
-        pill_text = "✅ Vivo" if alive else "❌ Eliminado"
+
+        if alive and used_reentry:
+            pill_class, pill_text = "status-pill alive", "✅ Vivo · reentry ya usado"
+        elif alive:
+            pill_class, pill_text = "status-pill alive", "✅ Vivo"
+        elif can_reentry:
+            pill_class, pill_text = "status-pill pending", "❌ Eliminado · puede reentry esta semana"
+        else:
+            pill_class, pill_text = "status-pill out", "❌ Eliminado"
+
+        # Un eliminado con reentry todavía disponible no se trata como estado
+        # final: no se atenúa ni se tacha el nombre, para que la fila resalte
+        # como "acción pendiente" en vez de leerse como fuera del juego.
+        is_terminal_elim = (not alive) and (not can_reentry)
+        row_class = "board-row eliminated" if is_terminal_elim else "board-row"
+
         sub = ""
         if not alive and elim_week not in ("", None):
             sub = f'<div class="board-sub">Eliminado en semana {html.escape(str(elim_week))}</div>'
